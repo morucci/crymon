@@ -16,13 +16,18 @@ where
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Crypto.Hash.SHA512 as SHA512
 import Data.Aeson (FromJSON, Object, decode, encode, parseJSON, withObject, (.:))
+import Data.Bifunctor (second)
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.HashMap.Strict as HM
 import Data.Time
-import Data.Time.Clock.POSIX
+  ( UTCTime,
+    getCurrentTime,
+    nominalDiffTimeToSeconds,
+  )
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Network.HTTP.Client
   ( Manager,
-    Request (method, requestBody, requestHeaders),
+    Request (method, requestHeaders),
     Response (responseBody),
     httpLbs,
     newManager,
@@ -79,11 +84,10 @@ getSystemStatus manager = do
 
 getAccountBalance :: Manager -> Text -> Text -> IO (Maybe AccountBalanceResponse)
 getAccountBalance manager privKey apiKey = do
-  let url = "https://api.kraken.com/0/private/Balance"
   initReq <- parseRequest url
   nonce <- getNonce
-  let postdata = [("nonce" :: ByteString, nonce)]
-  let signed = getSignedRequest "/0/private/Balance" (getQSString initReq (map (\t -> (fst t, Just (snd t))) postdata)) (decodeUtf8 nonce) privKey
+  postData <- getPostData
+  let signed = getSignedRequest (toText uriPath) (getQSString initReq (map (Data.Bifunctor.second Just) postData)) (decodeUtf8 nonce) privKey
   let request =
         initReq
           { requestHeaders =
@@ -93,17 +97,21 @@ getAccountBalance manager privKey apiKey = do
                 ("Accept", "*/*")
               ]
           }
-  let r = urlEncodedBody postdata request
-  response <- httpLbs r manager
-  print (responseBody response)
+  response <- httpLbs (urlEncodedBody postData request) manager
+  -- print (responseBody response)
   pure (decode (responseBody response) :: Maybe AccountBalanceResponse)
-
--- pure Nothing
+  where
+    uriPath = "/0/private/Balance"
+    url = "https://api.kraken.com" <> uriPath
+    getPostData :: IO [(ByteString, ByteString)]
+    getPostData = do
+      nonce <- getNonce
+      pure [("nonce" :: ByteString, nonce)]
 
 getNonce :: IO ByteString
 getNonce = do
   u <- getCurrentTime
-  pure (show (floor . (1e3 *) . nominalDiffTimeToSeconds $ utcTimeToPOSIXSeconds u))
+  pure (show (floor . (1e3 *) . nominalDiffTimeToSeconds $ utcTimeToPOSIXSeconds u :: Integer))
 
 getQSString :: Request -> [(ByteString, Maybe ByteString)] -> Text
 getQSString req attributes =
