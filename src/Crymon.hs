@@ -8,7 +8,7 @@
 -- Maintainer: Fabien Boucher <fabien.dot.boucher@gmail.com>
 --
 -- A tool to compute asset value from exchanges
-module Crymon (main) where
+module Crymon (displayAssets) where
 
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Crypto.Hash.SHA512 as SHA512
@@ -147,8 +147,8 @@ data Asset = Asset
   }
   deriving (Show)
 
-main :: IO ()
-main = do
+displayAssets :: IO ()
+displayAssets = do
   privKeyM <- lookupEnv krakenPrivKey
   let privKey = toText $ fromMaybe (error "No " <> krakenPrivKey <> " env var provided") privKeyM
   apiKeyM <- lookupEnv krakenAPIKey

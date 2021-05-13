@@ -1,7 +1,6 @@
 module Main (main) where
 
-import Crymon (someFunc)
-
+import Crymon (displayAssets)
 
 main :: IO ()
-main = someFunc
+main = displayAssets
