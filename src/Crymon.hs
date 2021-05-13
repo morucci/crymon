@@ -8,10 +8,7 @@
 -- Maintainer: Fabien Boucher <fabien.dot.boucher@gmail.com>
 --
 -- A tool to compute asset value from exchanges
-module Crymon
-  ( someFunc,
-  )
-where
+module Crymon (main) where
 
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Crypto.Hash.SHA512 as SHA512
@@ -144,14 +141,19 @@ krakenPrivKey = "KRAKEN_PRIV_KEY"
 krakenAPIKey :: String
 krakenAPIKey = "KRAKEN_API_KEY"
 
-someFunc :: IO ()
-someFunc = do
+data Asset = Asset
+  { name :: Text,
+    value :: Maybe Text
+  }
+  deriving (Show)
+
+main :: IO ()
+main = do
   privKeyM <- lookupEnv krakenPrivKey
   let privKey = toText $ fromMaybe (error "No " <> krakenPrivKey <> " env var provided") privKeyM
   apiKeyM <- lookupEnv krakenAPIKey
   let apiKey = toText $ fromMaybe (error "No " <> krakenAPIKey <> " env var provided") apiKeyM
   manager <- newManager tlsManagerSettings
   Just balance <- getAccountBalance manager privKey apiKey
-  let hm = aBRresult balance
-  let Just value = HM.lookup "DOT" hm
-  print (decode $ encode value :: Maybe String)
+  let myAssets = map (uncurry Asset) $ HM.foldrWithKey (\k v acc -> (k, decode $ encode v :: Maybe Text) : acc) [] $ aBRresult balance
+  print myAssets
