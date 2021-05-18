@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-missing-deriving-strategies #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 -- |
 -- Copyright: (c) 2021 Fabien Boucher
@@ -12,7 +13,7 @@ module Crymon (displayAssets) where
 
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Crypto.Hash.SHA512 as SHA512
-import Data.Aeson (FromJSON, Object, decode, encode, parseJSON, withObject, (.:))
+import Data.Aeson (FromJSON, decode, parseJSON, withObject, (.:))
 import Data.Bifunctor (second)
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.HashMap.Strict as HM
@@ -62,7 +63,7 @@ instance FromJSON SystemStatusResponse where
 
 data AccountBalanceResponse = AccountBalanceResponse
   { aBRerror :: [Text],
-    aBRresult :: Object
+    aBRresult :: Maybe (HM.HashMap Text Text)
   }
   deriving (Show)
 
@@ -143,7 +144,7 @@ krakenAPIKey = "KRAKEN_API_KEY"
 
 data Asset = Asset
   { name :: Text,
-    value :: Maybe Text
+    value :: Double
   }
   deriving (Show)
 
@@ -154,6 +155,12 @@ displayAssets = do
   apiKeyM <- lookupEnv krakenAPIKey
   let apiKey = toText $ fromMaybe (error "No " <> krakenAPIKey <> " env var provided") apiKeyM
   manager <- newManager tlsManagerSettings
-  Just balance <- getAccountBalance manager privKey apiKey
-  let myAssets = map (uncurry Asset) $ HM.foldrWithKey (\k v acc -> (k, decode $ encode v :: Maybe Text) : acc) [] $ aBRresult balance
-  print myAssets
+  balanceM <- getAccountBalance manager privKey apiKey
+  case balanceM of
+    Just (AccountBalanceResponse _ (Just balance)) -> print (toAssetList balance)
+    _ -> print ("Unable to get balance" :: [Char])
+  where
+    toAssetList :: HM.HashMap Text Text -> [Asset]
+    toAssetList hm = HM.foldrWithKey (\k v acc -> Asset k (getDouble v) : acc) [] hm
+    getDouble :: Text -> Double
+    getDouble dstr = fromMaybe 0.0 (readMaybe (toString dstr) :: Maybe Double)
